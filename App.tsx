@@ -46,13 +46,13 @@ const MenuIcon = ({ className = "w-6 h-6" }: { className?: string }) => (
 
 // Unique Storage keys for this specific menu to prevent mix-ups
 const STORAGE_KEYS = {
-  MENU: 'ezz_elsham_exclusive_data_v1',
-  ADDITIONS_PIZZA: 'ezz_elsham_exclusive_additions_pizza_v1',
-  ADDITIONS_CREPE: 'ezz_elsham_exclusive_additions_crepe_v1'
+  MENU: 'ezz_elsham_exclusive_data_v2',
+  ADDITIONS_PIZZA: 'ezz_elsham_exclusive_additions_pizza_v2',
+  ADDITIONS_CREPE: 'ezz_elsham_exclusive_additions_crepe_v2'
 };
 
 // Unique Firebase Reference Node to isolate from other apps
-const MENU_REF = 'ezz_elsham_exclusive_menu_v1';
+const MENU_REF = 'ezz_elsham_exclusive_menu_v2';
 
 export const App: React.FC = () => {
   const [isDark, setIsDark] = useState<boolean>(() => {
