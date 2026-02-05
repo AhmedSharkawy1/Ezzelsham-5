@@ -44,15 +44,15 @@ const MenuIcon = ({ className = "w-6 h-6" }: { className?: string }) => (
   </svg>
 );
 
-// Storage keys versioned to force update on client side
+// Unique Storage keys for this specific menu to prevent mix-ups
 const STORAGE_KEYS = {
-  MENU: 'ezz_sham_menu_data_v21',
-  ADDITIONS_PIZZA: 'ezz_sham_additions_pizza_v21',
-  ADDITIONS_CREPE: 'ezz_sham_additions_crepe_v21'
+  MENU: 'ezz_elsham_exclusive_data_v1',
+  ADDITIONS_PIZZA: 'ezz_elsham_exclusive_additions_pizza_v1',
+  ADDITIONS_CREPE: 'ezz_elsham_exclusive_additions_crepe_v1'
 };
 
-// Firebase Reference Node
-const MENU_REF = 'menu_v11';
+// Unique Firebase Reference Node to isolate from other apps
+const MENU_REF = 'ezz_elsham_exclusive_menu_v1';
 
 export const App: React.FC = () => {
   const [isDark, setIsDark] = useState<boolean>(() => {
