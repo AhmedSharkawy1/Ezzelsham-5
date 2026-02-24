@@ -1,7 +1,5 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getDatabase, ref, onValue, set } from 'firebase/database';
 import Header from './components/Header';
 import MenuSection from './components/MenuSection';
 import Logo from './components/Logo';
@@ -17,20 +15,6 @@ const PHONE_NUMBERS = [
   { label: "موبايل 3", number: "01147687757" },
   { label: "موبايل 4", number: "01111199851" }
 ];
-
-const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyAQID58uWvh9JPSvWabgyzmUWwRWdOBTfo",
-  authDomain: "ezz-elsham-menu.firebaseapp.com",
-  databaseURL: "https://ezz-elsham-menu-default-rtdb.firebaseio.com",
-  projectId: "ezz-elsham-menu",
-  storageBucket: "ezz-elsham-menu.firebasestorage.app",
-  messagingSenderId: "420141961588",
-  appId: "1:420141961588:web:a440de711fdb3b72585c21"
-};
-
-// Initialize Firebase safely (Singleton Pattern)
-const app = getApps().length === 0 ? initializeApp(FIREBASE_CONFIG) : getApp();
-const db = getDatabase(app);
 
 const AtyabLogo = ({ size = "w-16 h-16" }: { size?: string }) => (
   <div className={`${size} relative flex items-center justify-center overflow-hidden rounded-full border-[3px] border-red-600 shadow-md bg-white dark:bg-zinc-900 mb-4 transform transition-all duration-700 hover:rotate-6 active:scale-95 cursor-pointer p-1`}>
@@ -51,9 +35,6 @@ const STORAGE_KEYS = {
   ADDITIONS_CREPE: 'ezz_elsham_exclusive_additions_crepe_v2'
 };
 
-// Unique Firebase Reference Node to isolate from other apps
-const MENU_REF = 'ezz_elsham_exclusive_menu_v2';
-
 export const App: React.FC = () => {
   const [isDark, setIsDark] = useState<boolean>(() => {
     const saved = localStorage.getItem('theme');
@@ -64,7 +45,7 @@ export const App: React.FC = () => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const [passInput, setPassInput] = useState("");
-  const [isFirebaseConnected, setIsFirebaseConnected] = useState(false);
+  const [isServerConnected, setIsServerConnected] = useState(false);
   
   const [menuData, setMenuData] = useState<MenuSectionType[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.MENU);
@@ -89,22 +70,24 @@ export const App: React.FC = () => {
   const navRef = useRef<HTMLDivElement>(null);
   const isManualScrolling = useRef(false);
 
-  // Sync with Firebase
+  // Sync with Server (Vercel KV)
   useEffect(() => {
-    const menuRef = ref(db, MENU_REF);
-    const unsubscribe = onValue(menuRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        if (data.menuData) setMenuData(data.menuData);
-        if (data.additionsPizza) setAdditionsPizza(data.additionsPizza);
-        if (data.additionsCrepe) setAdditionsCrepe(data.additionsCrepe);
-        setIsFirebaseConnected(true);
+    const fetchMenuData = async () => {
+      try {
+        const response = await fetch('/api/menu');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.menuData) setMenuData(data.menuData);
+          if (data.additionsPizza) setAdditionsPizza(data.additionsPizza);
+          if (data.additionsCrepe) setAdditionsCrepe(data.additionsCrepe);
+          setIsServerConnected(true);
+        }
+      } catch (error) {
+        console.error("Server read failed:", error);
       }
-    }, (error) => {
-      console.error("Firebase read failed:", error);
-    });
+    };
 
-    return () => unsubscribe();
+    fetchMenuData();
   }, []);
 
   useEffect(() => {
@@ -257,21 +240,42 @@ export const App: React.FC = () => {
     }
   };
 
-  const saveMenuChanges = () => {
+  const handleUpdateImage = (sectionId: string, newImageUrl: string) => {
+    const updated = [...menuData];
+    const sectionIdx = updated.findIndex(s => s.id === sectionId);
+    if (sectionIdx > -1) {
+      updated[sectionIdx].image = newImageUrl;
+      setMenuData(updated);
+      triggerHaptic(10);
+    }
+  };
+
+  const saveMenuChanges = async () => {
     localStorage.setItem(STORAGE_KEYS.MENU, JSON.stringify(menuData));
     localStorage.setItem(STORAGE_KEYS.ADDITIONS_PIZZA, JSON.stringify(additionsPizza));
     localStorage.setItem(STORAGE_KEYS.ADDITIONS_CREPE, JSON.stringify(additionsCrepe));
 
-    set(ref(db, MENU_REF), {
-      menuData,
-      additionsPizza,
-      additionsCrepe,
-      lastUpdated: new Date().toISOString()
-    }).then(() => {
-      alert("✅ تم حفظ التعديلات على السيرفر (جميع الأجهزة)");
-    }).catch((err) => {
+    try {
+      const response = await fetch('/api/menu', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          menuData,
+          additionsPizza,
+          additionsCrepe,
+        }),
+      });
+
+      if (response.ok) {
+        alert("✅ تم حفظ التعديلات على السيرفر (جميع الأجهزة)");
+      } else {
+        throw new Error('Server returned an error');
+      }
+    } catch (err: any) {
       alert("⚠️ حدث خطأ أثناء الحفظ على السيرفر: " + err.message);
-    });
+    }
     
     setIsAdmin(false);
     triggerHaptic(50);
@@ -284,7 +288,7 @@ export const App: React.FC = () => {
       {isAdmin && (
         <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[55] bg-red-600 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-4 animate-slide-up border border-black/10">
           <span className="font-black text-xs uppercase tracking-widest">وضع التعديل نشط</span>
-          {isFirebaseConnected ? (
+          {isServerConnected ? (
             <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse shadow-[0_0_10px_#4ade80]"></span>
           ) : (
             <span className="w-2 h-2 rounded-full bg-yellow-400" title="جاري الاتصال..."></span>
@@ -361,6 +365,7 @@ export const App: React.FC = () => {
             onReorder={handleReorderItems}
             onToggleTag={handleToggleTag}
             onDeleteItem={handleDeleteItem}
+            onUpdateImage={handleUpdateImage}
           />
         ))}
 
