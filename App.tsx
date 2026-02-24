@@ -16,11 +16,64 @@ const PHONE_NUMBERS = [
   { label: "موبايل 4", number: "01111199851" }
 ];
 
-const AtyabLogo = ({ size = "w-16 h-16" }: { size?: string }) => (
-  <div className={`${size} relative flex items-center justify-center overflow-hidden rounded-full border-[3px] border-red-600 shadow-md bg-white dark:bg-zinc-900 mb-4 transform transition-all duration-700 hover:rotate-6 active:scale-95 cursor-pointer p-1`}>
-    <Logo />
-  </div>
-);
+const AtyabLogo = ({ size = "w-16 h-16", src, onUpload, isAdmin }: { size?: string, src?: string, onUpload?: (url: string) => void, isAdmin?: boolean }) => {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState(false);
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !onUpload) return;
+
+    try {
+      setIsUploading(true);
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      
+      reader.onload = async () => {
+        const base64Data = reader.result as string;
+        const response = await fetch('/api/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            filename: `logo-${Date.now()}-${file.name}`,
+            base64Data,
+            contentType: file.type,
+          }),
+        });
+
+        if (!response.ok) throw new Error('Upload failed');
+        const data = await response.json();
+        if (data.url) onUpload(data.url);
+      };
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      alert('حدث خطأ أثناء رفع الصورة');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  return (
+    <div className="relative group">
+      <div className={`${size} relative flex items-center justify-center overflow-hidden rounded-full border-[3px] border-red-600 shadow-md bg-white dark:bg-zinc-900 mb-4 transform transition-all duration-700 hover:rotate-6 active:scale-95 cursor-pointer p-1`}>
+        <Logo src={src} />
+        {isUploading && (
+          <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+            <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+          </div>
+        )}
+      </div>
+      {isAdmin && onUpload && (
+        <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 z-20 opacity-0 group-hover:opacity-100 transition-opacity">
+          <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
+          <button onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="bg-red-600 text-white px-2 py-1 rounded-lg text-[10px] font-black shadow-lg whitespace-nowrap">
+            تغيير اللوجو
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const MenuIcon = ({ className = "w-6 h-6" }: { className?: string }) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -62,6 +115,8 @@ export const App: React.FC = () => {
     return saved ? JSON.parse(saved) : CREPE_ADDITIONS;
   });
 
+  const [logoUrl, setLogoUrl] = useState<string>('');
+
   const [activeSection, setActiveSection] = useState<string>('');
   const [showBottomCallMenu, setShowBottomCallMenu] = useState(false);
   const [showCategoriesMenu, setShowCategoriesMenu] = useState(false);
@@ -80,6 +135,7 @@ export const App: React.FC = () => {
           if (data.menuData) setMenuData(data.menuData);
           if (data.additionsPizza) setAdditionsPizza(data.additionsPizza);
           if (data.additionsCrepe) setAdditionsCrepe(data.additionsCrepe);
+          if (data.logoUrl) setLogoUrl(data.logoUrl);
           setIsServerConnected(true);
         }
       } catch (error) {
@@ -265,6 +321,7 @@ export const App: React.FC = () => {
           menuData,
           additionsPizza,
           additionsCrepe,
+          logoUrl,
         }),
       });
 
@@ -390,7 +447,7 @@ export const App: React.FC = () => {
 
         <footer className="mt-16 pb-12 flex flex-col items-center gap-10 reveal-item">
             <div className="w-full bg-white dark:bg-zinc-900 rounded-[2.5rem] p-10 shadow-xl border border-zinc-200 dark:border-white/10 flex flex-col items-center gap-8 text-center">
-               <AtyabLogo size="w-20 h-20" />
+               <AtyabLogo size="w-20 h-20" src={logoUrl} onUpload={setLogoUrl} isAdmin={isAdmin} />
                <div className="flex flex-col items-center gap-4">
                   <div className="relative p-4 bg-white rounded-[2rem] border-4 border-zinc-50 dark:border-zinc-800 shadow-2xl">
                     <img src={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(currentUrl)}`} alt="QR Code" className="w-44 h-44 md:w-52 md:h-52" />
