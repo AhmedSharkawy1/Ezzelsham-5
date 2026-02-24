@@ -52,16 +52,19 @@ const MenuSection: React.FC<Props> = ({
           }),
         });
 
-        if (!response.ok) throw new Error('Upload failed');
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.details || errData.error || 'Upload failed');
+        }
         
         const data = await response.json();
         if (data.url && onUpdateImage) {
           onUpdateImage(section.id, data.url);
         }
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error uploading image:', error);
-      alert('حدث خطأ أثناء رفع الصورة');
+      alert(`حدث خطأ أثناء رفع الصورة: ${error.message}`);
     } finally {
       setIsUploading(false);
     }

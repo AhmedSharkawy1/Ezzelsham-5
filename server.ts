@@ -86,16 +86,22 @@ app.post("/api/upload", async (req, res) => {
     // Convert base64 to buffer
     const buffer = Buffer.from(base64Data.split(",")[1] || base64Data, "base64");
     
+    const token = process.env.BLOB_READ_WRITE_TOKEN?.replace(/^"|"$/g, '');
+    if (!token) {
+      console.error("Missing BLOB_READ_WRITE_TOKEN");
+      return res.status(500).json({ error: "Storage is not configured" });
+    }
+
     const blob = await put(filename, buffer, {
       access: "public",
       contentType: contentType || "image/jpeg",
-      token: process.env.BLOB_READ_WRITE_TOKEN?.replace(/^"|"$/g, ''),
+      token,
     });
 
     res.json({ url: blob.url });
-  } catch (error) {
-    console.error("Error uploading to Blob:", error);
-    res.status(500).json({ error: "Failed to upload image" });
+  } catch (error: any) {
+    console.error("Error uploading to Blob:", error.message || error);
+    res.status(500).json({ error: "Failed to upload image", details: error.message || String(error) });
   }
 });
 

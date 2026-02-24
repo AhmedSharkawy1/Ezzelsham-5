@@ -41,13 +41,16 @@ const AtyabLogo = ({ size = "w-16 h-16", src, onUpload, isAdmin }: { size?: stri
           }),
         });
 
-        if (!response.ok) throw new Error('Upload failed');
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.details || errData.error || 'Upload failed');
+        }
         const data = await response.json();
         if (data.url) onUpload(data.url);
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error uploading image:', error);
-      alert('حدث خطأ أثناء رفع الصورة');
+      alert(`حدث خطأ أثناء رفع الصورة: ${error.message}`);
     } finally {
       setIsUploading(false);
     }
