@@ -1,5 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { getDatabase, ref, onValue, set } from 'firebase/database';
 import Header from './components/Header';
 import MenuSection from './components/MenuSection';
 import Logo from './components/Logo';
@@ -16,67 +18,25 @@ const PHONE_NUMBERS = [
   { label: "موبايل 4", number: "01111199851" }
 ];
 
-const AtyabLogo = ({ size = "w-16 h-16", src, onUpload, isAdmin }: { size?: string, src?: string, onUpload?: (url: string) => void, isAdmin?: boolean }) => {
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isUploading, setIsUploading] = useState(false);
-
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !onUpload) return;
-
-    try {
-      setIsUploading(true);
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      
-      reader.onload = async () => {
-        const base64Data = reader.result as string;
-        const response = await fetch('/api/upload', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            filename: `logo-${Date.now()}-${file.name}`,
-            base64Data,
-            contentType: file.type,
-          }),
-        });
-
-        if (!response.ok) {
-          const errData = await response.json().catch(() => ({}));
-          throw new Error(errData.details || errData.error || 'Upload failed');
-        }
-        const data = await response.json();
-        if (data.url) onUpload(data.url);
-      };
-    } catch (error: any) {
-      console.error('Error uploading image:', error);
-      alert(`حدث خطأ أثناء رفع الصورة: ${error.message}`);
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  return (
-    <div className="relative group">
-      <div className={`${size} relative flex items-center justify-center overflow-hidden rounded-full border-[3px] border-red-600 shadow-md bg-white dark:bg-zinc-900 mb-4 transform transition-all duration-700 hover:rotate-6 active:scale-95 cursor-pointer p-1`}>
-        <Logo src={src} />
-        {isUploading && (
-          <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-            <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-          </div>
-        )}
-      </div>
-      {isAdmin && onUpload && (
-        <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 z-20 opacity-0 group-hover:opacity-100 transition-opacity">
-          <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
-          <button onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="bg-red-600 text-white px-2 py-1 rounded-lg text-[10px] font-black shadow-lg whitespace-nowrap">
-            تغيير اللوجو
-          </button>
-        </div>
-      )}
-    </div>
-  );
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyAQID58uWvh9JPSvWabgyzmUWwRWdOBTfo",
+  authDomain: "ezz-elsham-menu.firebaseapp.com",
+  databaseURL: "https://ezz-elsham-menu-default-rtdb.firebaseio.com",
+  projectId: "ezz-elsham-menu",
+  storageBucket: "ezz-elsham-menu.firebasestorage.app",
+  messagingSenderId: "420141961588",
+  appId: "1:420141961588:web:a440de711fdb3b72585c21"
 };
+
+// Initialize Firebase safely (Singleton Pattern)
+const app = getApps().length === 0 ? initializeApp(FIREBASE_CONFIG) : getApp();
+const db = getDatabase(app);
+
+const AtyabLogo = ({ size = "w-16 h-16" }: { size?: string }) => (
+  <div className={`${size} relative flex items-center justify-center overflow-hidden rounded-full border-[3px] border-red-600 shadow-md bg-white dark:bg-zinc-900 mb-4 transform transition-all duration-700 hover:rotate-6 active:scale-95 cursor-pointer p-1`}>
+    <Logo />
+  </div>
+);
 
 const MenuIcon = ({ className = "w-6 h-6" }: { className?: string }) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -91,6 +51,9 @@ const STORAGE_KEYS = {
   ADDITIONS_CREPE: 'ezz_elsham_exclusive_additions_crepe_v2'
 };
 
+// Unique Firebase Reference Node to isolate from other apps
+const MENU_REF = 'ezz_elsham_exclusive_menu_v2';
+
 export const App: React.FC = () => {
   const [isDark, setIsDark] = useState<boolean>(() => {
     const saved = localStorage.getItem('theme');
@@ -101,7 +64,7 @@ export const App: React.FC = () => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const [passInput, setPassInput] = useState("");
-  const [isServerConnected, setIsServerConnected] = useState(false);
+  const [isFirebaseConnected, setIsFirebaseConnected] = useState(false);
   
   const [menuData, setMenuData] = useState<MenuSectionType[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.MENU);
@@ -118,8 +81,6 @@ export const App: React.FC = () => {
     return saved ? JSON.parse(saved) : CREPE_ADDITIONS;
   });
 
-  const [logoUrl, setLogoUrl] = useState<string>('');
-
   const [activeSection, setActiveSection] = useState<string>('');
   const [showBottomCallMenu, setShowBottomCallMenu] = useState(false);
   const [showCategoriesMenu, setShowCategoriesMenu] = useState(false);
@@ -128,25 +89,22 @@ export const App: React.FC = () => {
   const navRef = useRef<HTMLDivElement>(null);
   const isManualScrolling = useRef(false);
 
-  // Sync with Server (Vercel KV)
+  // Sync with Firebase
   useEffect(() => {
-    const fetchMenuData = async () => {
-      try {
-        const response = await fetch('/api/menu');
-        if (response.ok) {
-          const data = await response.json();
-          if (data.menuData) setMenuData(data.menuData);
-          if (data.additionsPizza) setAdditionsPizza(data.additionsPizza);
-          if (data.additionsCrepe) setAdditionsCrepe(data.additionsCrepe);
-          if (data.logoUrl) setLogoUrl(data.logoUrl);
-          setIsServerConnected(true);
-        }
-      } catch (error) {
-        console.error("Server read failed:", error);
+    const menuRef = ref(db, MENU_REF);
+    const unsubscribe = onValue(menuRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        if (data.menuData) setMenuData(data.menuData);
+        if (data.additionsPizza) setAdditionsPizza(data.additionsPizza);
+        if (data.additionsCrepe) setAdditionsCrepe(data.additionsCrepe);
+        setIsFirebaseConnected(true);
       }
-    };
+    }, (error) => {
+      console.error("Firebase read failed:", error);
+    });
 
-    fetchMenuData();
+    return () => unsubscribe();
   }, []);
 
   useEffect(() => {
@@ -299,43 +257,21 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleUpdateImage = (sectionId: string, newImageUrl: string) => {
-    const updated = [...menuData];
-    const sectionIdx = updated.findIndex(s => s.id === sectionId);
-    if (sectionIdx > -1) {
-      updated[sectionIdx].image = newImageUrl;
-      setMenuData(updated);
-      triggerHaptic(10);
-    }
-  };
-
-  const saveMenuChanges = async () => {
+  const saveMenuChanges = () => {
     localStorage.setItem(STORAGE_KEYS.MENU, JSON.stringify(menuData));
     localStorage.setItem(STORAGE_KEYS.ADDITIONS_PIZZA, JSON.stringify(additionsPizza));
     localStorage.setItem(STORAGE_KEYS.ADDITIONS_CREPE, JSON.stringify(additionsCrepe));
 
-    try {
-      const response = await fetch('/api/menu', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          menuData,
-          additionsPizza,
-          additionsCrepe,
-          logoUrl,
-        }),
-      });
-
-      if (response.ok) {
-        alert("✅ تم حفظ التعديلات على السيرفر (جميع الأجهزة)");
-      } else {
-        throw new Error('Server returned an error');
-      }
-    } catch (err: any) {
+    set(ref(db, MENU_REF), {
+      menuData,
+      additionsPizza,
+      additionsCrepe,
+      lastUpdated: new Date().toISOString()
+    }).then(() => {
+      alert("✅ تم حفظ التعديلات على السيرفر (جميع الأجهزة)");
+    }).catch((err) => {
       alert("⚠️ حدث خطأ أثناء الحفظ على السيرفر: " + err.message);
-    }
+    });
     
     setIsAdmin(false);
     triggerHaptic(50);
@@ -348,7 +284,7 @@ export const App: React.FC = () => {
       {isAdmin && (
         <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[55] bg-red-600 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-4 animate-slide-up border border-black/10">
           <span className="font-black text-xs uppercase tracking-widest">وضع التعديل نشط</span>
-          {isServerConnected ? (
+          {isFirebaseConnected ? (
             <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse shadow-[0_0_10px_#4ade80]"></span>
           ) : (
             <span className="w-2 h-2 rounded-full bg-yellow-400" title="جاري الاتصال..."></span>
@@ -425,7 +361,6 @@ export const App: React.FC = () => {
             onReorder={handleReorderItems}
             onToggleTag={handleToggleTag}
             onDeleteItem={handleDeleteItem}
-            onUpdateImage={handleUpdateImage}
           />
         ))}
 
@@ -450,7 +385,7 @@ export const App: React.FC = () => {
 
         <footer className="mt-16 pb-12 flex flex-col items-center gap-10 reveal-item">
             <div className="w-full bg-white dark:bg-zinc-900 rounded-[2.5rem] p-10 shadow-xl border border-zinc-200 dark:border-white/10 flex flex-col items-center gap-8 text-center">
-               <AtyabLogo size="w-20 h-20" src={logoUrl} onUpload={setLogoUrl} isAdmin={isAdmin} />
+               <AtyabLogo size="w-20 h-20" />
                <div className="flex flex-col items-center gap-4">
                   <div className="relative p-4 bg-white rounded-[2rem] border-4 border-zinc-50 dark:border-zinc-800 shadow-2xl">
                     <img src={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(currentUrl)}`} alt="QR Code" className="w-44 h-44 md:w-52 md:h-52" />

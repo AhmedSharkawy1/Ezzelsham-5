@@ -10,7 +10,6 @@ interface Props {
   onReorder?: (sectionId: string, itemIdx: number, direction: 'up' | 'down') => void;
   onToggleTag?: (sectionId: string, itemIdx: number, tag: 'isPopular' | 'isSpicy') => void;
   onDeleteItem?: (sectionId: string, itemIdx: number) => void;
-  onUpdateImage?: (sectionId: string, newImageUrl: string) => void;
 }
 
 const MenuSection: React.FC<Props> = ({ 
@@ -20,56 +19,8 @@ const MenuSection: React.FC<Props> = ({
   onUpdatePrice, 
   onReorder,
   onToggleTag,
-  onDeleteItem,
-  onUpdateImage
+  onDeleteItem
 }) => {
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
-  const [isUploading, setIsUploading] = React.useState(false);
-
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    try {
-      setIsUploading(true);
-      
-      // Convert to base64
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      
-      reader.onload = async () => {
-        const base64Data = reader.result as string;
-        
-        const response = await fetch('/api/upload', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            filename: `${section.id}-${Date.now()}-${file.name}`,
-            base64Data,
-            contentType: file.type,
-          }),
-        });
-
-        if (!response.ok) {
-          const errData = await response.json().catch(() => ({}));
-          throw new Error(errData.details || errData.error || 'Upload failed');
-        }
-        
-        const data = await response.json();
-        if (data.url && onUpdateImage) {
-          onUpdateImage(section.id, data.url);
-        }
-      };
-    } catch (error: any) {
-      console.error('Error uploading image:', error);
-      alert(`حدث خطأ أثناء رفع الصورة: ${error.message}`);
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
   const isNumeric = (val: string) => /^\d+$/.test(val.trim());
   const isCardLayout = section.id === 'pizza' || section.id === 'grill-corner';
 
@@ -83,26 +34,6 @@ const MenuSection: React.FC<Props> = ({
           loading={isFirst ? "eager" : "lazy"}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent opacity-80"></div>
-        
-        {isAdmin && (
-          <div className="absolute top-4 right-4 z-20">
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              onChange={handleImageUpload} 
-              accept="image/*" 
-              className="hidden" 
-            />
-            <button 
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isUploading}
-              className="bg-white/90 dark:bg-black/90 backdrop-blur-sm text-zinc-900 dark:text-white px-4 py-2 rounded-xl text-xs font-black shadow-lg flex items-center gap-2 hover:bg-white dark:hover:bg-black transition-colors disabled:opacity-50"
-            >
-              {isUploading ? 'جاري الرفع...' : 'تغيير الصورة 📸'}
-            </button>
-          </div>
-        )}
-
         <div className="absolute bottom-8 right-8 left-8 text-right">
           <div className="flex flex-col gap-1">
             <span className="text-red-500 font-black text-[11px] tracking-[0.2em] uppercase">فئة القائمة</span>
