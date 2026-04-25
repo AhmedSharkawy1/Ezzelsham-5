@@ -10,6 +10,10 @@ interface Props {
   onReorder?: (sectionId: string, itemIdx: number, direction: 'up' | 'down') => void;
   onToggleTag?: (sectionId: string, itemIdx: number, tag: 'isPopular' | 'isSpicy') => void;
   onDeleteItem?: (sectionId: string, itemIdx: number) => void;
+  onAddItem?: (sectionId: string) => void;
+  onEditItem?: (sectionId: string, itemIdx: number, field: string, value: string) => void;
+  onEditSection?: (sectionId: string, field: string, value: string) => void;
+  onDeleteSection?: (sectionId: string) => void;
 }
 
 const MenuSection: React.FC<Props> = ({ 
@@ -19,7 +23,11 @@ const MenuSection: React.FC<Props> = ({
   onUpdatePrice, 
   onReorder,
   onToggleTag,
-  onDeleteItem
+  onDeleteItem,
+  onAddItem,
+  onEditItem,
+  onEditSection,
+  onDeleteSection
 }) => {
   const isNumeric = (val: string) => /^\d+$/.test(val.trim());
   const isCardLayout = section.id === 'pizza' || section.id === 'grill-corner';
@@ -27,6 +35,17 @@ const MenuSection: React.FC<Props> = ({
   return (
     <section id={section.id} className="mb-10 scroll-mt-[170px]" aria-labelledby={`${section.id}-heading`}>
       <div className="relative aspect-[16/10] md:aspect-[21/9] rounded-[2.5rem] overflow-hidden mb-6 shadow-2xl border border-zinc-200 dark:border-white/5 bg-zinc-200 dark:bg-zinc-900 reveal-item group">
+        {isAdmin && onEditSection && (
+          <div className="absolute top-4 right-4 z-20 flex gap-2">
+            <input 
+              type="text" 
+              value={section.image} 
+              onChange={e => onEditSection(section.id, 'image', e.target.value)} 
+              placeholder="رابط صورة القسم" 
+              className="bg-black/50 text-white px-3 py-1.5 rounded-xl text-xs font-bold outline-none backdrop-blur-md border border-white/20 w-48"
+            />
+          </div>
+        )}
         <img
           src={section.image}
           alt=""
@@ -34,17 +53,54 @@ const MenuSection: React.FC<Props> = ({
           loading={isFirst ? "eager" : "lazy"}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent opacity-80"></div>
-        <div className="absolute bottom-8 right-8 left-8 text-right">
-          <div className="flex flex-col gap-1">
+        {isAdmin && onDeleteSection && (
+          <button 
+            onClick={() => onDeleteSection(section.id)}
+            className="absolute top-4 left-4 bg-red-600/80 hover:bg-red-600 text-white px-3 py-1.5 rounded-xl backdrop-blur-md transition-all shadow-lg text-xs font-black z-20"
+          >
+            حذف القسم
+          </button>
+        )}
+        <div className="absolute bottom-6 right-6 left-6 md:bottom-8 md:right-8 md:left-8 text-right">
+          <div className="flex flex-col gap-2">
             <span className="text-red-500 font-black text-[11px] tracking-[0.2em] uppercase">فئة القائمة</span>
             <div className="flex items-center gap-3 justify-end">
-              <span className="text-3xl leading-none animate-emoji">{section.emoji}</span>
-              <h2 id={`${section.id}-heading`} className="text-3xl font-black text-white leading-none">{section.title}</h2>
+              {isAdmin && onEditSection ? (
+                <>
+                  <input 
+                    type="text" 
+                    value={section.emoji} 
+                    onChange={e => onEditSection(section.id, 'emoji', e.target.value)} 
+                    className="w-12 bg-black/40 text-white rounded-lg text-center text-3xl outline-none border border-white/10" 
+                  />
+                  <input 
+                    type="text" 
+                    value={section.title} 
+                    onChange={e => onEditSection(section.id, 'title', e.target.value)} 
+                    className="w-full max-w-[200px] bg-black/40 text-white rounded-lg px-2 py-1 text-3xl font-black outline-none text-right border border-white/10" 
+                  />
+                </>
+              ) : (
+                <>
+                  <span className="text-3xl leading-none animate-emoji">{section.emoji}</span>
+                  <h2 id={`${section.id}-heading`} className="text-3xl font-black text-white leading-none">{section.title}</h2>
+                </>
+              )}
             </div>
-            {section.description && (
-              <p className="text-white/80 text-[12px] font-bold mt-2 bg-red-600/40 px-3 py-1 rounded-full inline-block backdrop-blur-sm self-end">
-                {section.description}
-              </p>
+            {isAdmin && onEditSection ? (
+                <input 
+                  type="text" 
+                  value={section.description || ''} 
+                  placeholder="وصف القسم (اختياري)" 
+                  onChange={e => onEditSection(section.id, 'description', e.target.value)} 
+                  className="w-full max-w-[300px] bg-black/40 text-white text-[12px] font-bold px-3 py-1.5 rounded-full outline-none text-right self-end border border-white/10" 
+                />
+            ) : (
+                section.description && (
+                  <p className="text-white/80 text-[12px] font-bold mt-1 bg-red-600/40 px-3 py-1 rounded-full inline-block backdrop-blur-sm self-end">
+                    {section.description}
+                  </p>
+                )
             )}
           </div>
         </div>
@@ -69,7 +125,7 @@ const MenuSection: React.FC<Props> = ({
                         <button onClick={(e) => { e.stopPropagation(); onReorder?.(section.id, idx, 'up'); }} className="p-1.5 bg-zinc-100 dark:bg-zinc-700/50 rounded-lg hover:bg-red-600 hover:text-white transition-all text-[10px]">▲</button>
                         <button onClick={(e) => { e.stopPropagation(); onReorder?.(section.id, idx, 'down'); }} className="p-1.5 bg-zinc-100 dark:bg-zinc-700/50 rounded-lg hover:bg-red-600 hover:text-white transition-all text-[10px]">▼</button>
                         <button 
-                          onClick={(e) => { e.stopPropagation(); if(confirm('هل تريد حذف هذا العنصر؟')) onDeleteItem?.(section.id, idx); }}
+                          onClick={(e) => { e.stopPropagation(); onDeleteItem?.(section.id, idx); }}
                           className="p-1.5 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white rounded-lg transition-all"
                         >
                           ✕
@@ -82,7 +138,7 @@ const MenuSection: React.FC<Props> = ({
                           <button onClick={(e) => { e.stopPropagation(); onReorder?.(section.id, idx, 'down'); }} className="p-1.5 bg-zinc-100 dark:bg-zinc-800 rounded-lg hover:bg-red-600 hover:text-white transition-all text-[10px]">▼</button>
                         </div>
                         <button 
-                          onClick={(e) => { e.stopPropagation(); if(confirm('هل تريد حذف هذا العنصر؟')) onDeleteItem?.(section.id, idx); }}
+                          onClick={(e) => { e.stopPropagation(); onDeleteItem?.(section.id, idx); }}
                           className="p-2 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white rounded-xl transition-all shadow-sm"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
@@ -97,7 +153,17 @@ const MenuSection: React.FC<Props> = ({
                 <div className="flex flex-col items-start w-full">
                    {/* Header - Adjusted for RTL (justify-start = Right) */}
                    <div className="flex items-center gap-2 mb-1 justify-start w-full text-right">
-                         <h3 className="text-zinc-900 dark:text-zinc-100 font-black text-xl leading-tight text-right">{item.name}</h3>
+                         {isAdmin && onEditItem ? (
+                           <input 
+                             type="text" 
+                             value={item.name} 
+                             onChange={e => onEditItem(section.id, idx, 'name', e.target.value)} 
+                             onClick={e => e.stopPropagation()}
+                             className="text-zinc-900 dark:text-zinc-100 font-black text-xl leading-tight text-right bg-transparent border-b border-zinc-300/50 dark:border-white/20 outline-none w-full" 
+                           />
+                         ) : (
+                           <h3 className="text-zinc-900 dark:text-zinc-100 font-black text-xl leading-tight text-right">{item.name}</h3>
+                         )}
                          {/* Badges */}
                          <div className="flex items-center gap-1">
                              {isAdmin ? (
@@ -114,7 +180,18 @@ const MenuSection: React.FC<Props> = ({
                          </div>
                    </div>
                    
-                   {item.description && <p className="text-[11px] text-zinc-500 dark:text-zinc-400 font-bold leading-relaxed text-right w-full opacity-80">{item.description}</p>}
+                   {isAdmin && onEditItem ? (
+                     <textarea
+                       value={item.description || ''}
+                       onChange={e => onEditItem(section.id, idx, 'description', e.target.value)}
+                       onClick={e => e.stopPropagation()}
+                       placeholder="وصف الصنف"
+                       className="text-[11px] text-zinc-500 dark:text-zinc-400 font-bold leading-relaxed text-right w-full opacity-80 bg-transparent border-b border-zinc-300/50 dark:border-white/20 outline-none mt-1 resize-none"
+                       rows={2}
+                     />
+                   ) : (
+                     item.description && <p className="text-[11px] text-zinc-500 dark:text-zinc-400 font-bold leading-relaxed text-right w-full opacity-80">{item.description}</p>
+                   )}
 
                    {/* Prices (Card Grid) */}
                    <div className={`grid gap-2 w-full pt-2 mt-3 border-t border-zinc-200/50 dark:border-white/5 ${item.prices.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
@@ -167,15 +244,36 @@ const MenuSection: React.FC<Props> = ({
                           </>
                         )}
                       </div>
-                      <span className="text-zinc-900 dark:text-zinc-100 font-black text-lg leading-snug transition-colors order-2 text-right w-full">
-                        {item.name}
-                      </span>
+                      {isAdmin && onEditItem ? (
+                        <input 
+                          type="text" 
+                          value={item.name} 
+                          onChange={e => onEditItem(section.id, idx, 'name', e.target.value)} 
+                          onClick={e => e.stopPropagation()}
+                          className="text-zinc-900 dark:text-zinc-100 font-black text-lg leading-snug transition-colors order-2 text-right w-full max-w-[200px] bg-transparent border-b border-zinc-300/50 dark:border-white/20 outline-none" 
+                        />
+                      ) : (
+                        <span className="text-zinc-900 dark:text-zinc-100 font-black text-lg leading-snug transition-colors order-2 text-right w-full">
+                          {item.name}
+                        </span>
+                      )}
                     </div>
                     
-                    {item.description && (
-                      <p className="text-[11px] text-zinc-500 dark:text-zinc-400 font-medium leading-relaxed">
-                        {item.description}
-                      </p>
+                    {isAdmin && onEditItem ? (
+                      <textarea
+                        value={item.description || ''}
+                        onChange={e => onEditItem(section.id, idx, 'description', e.target.value)}
+                        onClick={e => e.stopPropagation()}
+                        placeholder="وصف الصنف"
+                        className="text-[11px] text-zinc-500 dark:text-zinc-400 font-medium leading-relaxed bg-transparent border-b border-zinc-300/50 dark:border-white/20 outline-none w-full resize-none mt-1"
+                        rows={2}
+                      />
+                    ) : (
+                      item.description && (
+                        <p className="text-[11px] text-zinc-500 dark:text-zinc-400 font-medium leading-relaxed">
+                          {item.description}
+                        </p>
+                      )
                     )}
                   </div>
                   
@@ -221,6 +319,18 @@ const MenuSection: React.FC<Props> = ({
               )}
             </div>
           ))}
+
+          {isAdmin && onAddItem && (
+            <div className="pt-4">
+              <button 
+                onClick={() => onAddItem(section.id)}
+                className="w-full bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300 font-black text-sm py-3 rounded-[1.5rem] transition-colors border border-dashed border-zinc-300 dark:border-zinc-600 flex justify-center items-center gap-2 shadow-sm"
+              >
+                <span className="text-xl leading-none">+</span>
+                إضافة صنف جديد
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </section>

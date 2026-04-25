@@ -200,22 +200,30 @@ export const App: React.FC = () => {
 
   const handleUpdatePrice = (sectionId: string, itemIdx: number, priceIdx: number, newVal: string) => {
     if (sectionId === 'additions-pizza') {
-      const updated = { ...additionsPizza };
-      updated.items[itemIdx].prices[priceIdx] = newVal;
-      setAdditionsPizza(updated);
+      const items = [...additionsPizza.items];
+      const prices = [...items[itemIdx].prices];
+      prices[priceIdx] = newVal;
+      items[itemIdx] = { ...items[itemIdx], prices };
+      setAdditionsPizza({ ...additionsPizza, items });
       return;
     }
     if (sectionId === 'additions-crepe') {
-      const updated = { ...additionsCrepe };
-      updated.items[itemIdx].prices[priceIdx] = newVal;
-      setAdditionsCrepe(updated);
+      const items = [...additionsCrepe.items];
+      const prices = [...items[itemIdx].prices];
+      prices[priceIdx] = newVal;
+      items[itemIdx] = { ...items[itemIdx], prices };
+      setAdditionsCrepe({ ...additionsCrepe, items });
       return;
     }
 
     const updated = [...menuData];
     const sectionIdx = updated.findIndex(s => s.id === sectionId);
     if (sectionIdx > -1) {
-      updated[sectionIdx].items[itemIdx].prices[priceIdx] = newVal;
+      const items = [...updated[sectionIdx].items];
+      const prices = [...items[itemIdx].prices];
+      prices[priceIdx] = newVal;
+      items[itemIdx] = { ...items[itemIdx], prices };
+      updated[sectionIdx] = { ...updated[sectionIdx], items };
       setMenuData(updated);
     }
   };
@@ -224,8 +232,12 @@ export const App: React.FC = () => {
     const updated = [...menuData];
     const sectionIdx = updated.findIndex(s => s.id === sectionId);
     if (sectionIdx > -1) {
-      const currentVal = updated[sectionIdx].items[itemIdx][tag];
-      updated[sectionIdx].items[itemIdx][tag] = !currentVal;
+      const items = [...updated[sectionIdx].items];
+      items[itemIdx] = {
+        ...items[itemIdx],
+        [tag]: !items[itemIdx][tag]
+      };
+      updated[sectionIdx] = { ...updated[sectionIdx], items };
       setMenuData(updated);
       triggerHaptic(10);
     }
@@ -235,7 +247,10 @@ export const App: React.FC = () => {
     const updated = [...menuData];
     const sectionIdx = updated.findIndex(s => s.id === sectionId);
     if (sectionIdx > -1) {
-      updated[sectionIdx].items.splice(itemIdx, 1);
+      updated[sectionIdx] = { 
+        ...updated[sectionIdx], 
+        items: updated[sectionIdx].items.filter((_, idx) => idx !== itemIdx) 
+      };
       setMenuData(updated);
       triggerHaptic([20, 10, 20]);
     }
@@ -251,10 +266,73 @@ export const App: React.FC = () => {
       } else if (direction === 'down' && itemIdx < items.length - 1) {
         [items[itemIdx], items[itemIdx + 1]] = [items[itemIdx + 1], items[itemIdx]];
       }
-      updated[sectionIdx].items = items;
+      updated[sectionIdx] = { ...updated[sectionIdx], items };
       setMenuData(updated);
       triggerHaptic(5);
     }
+  };
+
+  const handleAddItem = (sectionId: string) => {
+    const updated = [...menuData];
+    const sectionIdx = updated.findIndex(s => s.id === sectionId);
+    if (sectionIdx > -1) {
+      const section = updated[sectionIdx];
+      const modelItem = section.items[0];
+      const numPrices = modelItem ? modelItem.prices.length : 1;
+      const labels = modelItem ? modelItem.labels : undefined;
+      const newItem = {
+        name: "صنف جديد",
+        prices: Array(numPrices).fill("0"),
+        labels: labels,
+        description: ""
+      };
+      updated[sectionIdx] = { ...section, items: [...section.items, newItem] };
+      setMenuData(updated);
+      triggerHaptic(10);
+    }
+  };
+
+  const handleEditItem = (sectionId: string, itemIdx: number, field: string, value: string) => {
+    const updated = [...menuData];
+    const sectionIdx = updated.findIndex(s => s.id === sectionId);
+    if (sectionIdx > -1) {
+      const items = [...updated[sectionIdx].items];
+      items[itemIdx] = {
+        ...items[itemIdx],
+        [field]: value
+      };
+      updated[sectionIdx] = { ...updated[sectionIdx], items };
+      setMenuData(updated);
+    }
+  };
+
+  const handleEditSection = (sectionId: string, field: string, value: string) => {
+    const updated = [...menuData];
+    const sectionIdx = updated.findIndex(s => s.id === sectionId);
+    if (sectionIdx > -1) {
+      updated[sectionIdx] = {
+        ...updated[sectionIdx],
+        [field]: value
+      };
+      setMenuData(updated);
+    }
+  };
+
+  const handleAddSection = () => {
+    const newSection: MenuSectionType = {
+        id: `section-${Date.now()}`,
+        title: "قسم جديد",
+        emoji: "🍽️",
+        image: "https://images.unsplash.com/photo-1549488344-1f9b8d2bd1f3?auto=format&fit=crop&q=80&w=600",
+        items: []
+    };
+    setMenuData([...menuData, newSection]);
+    triggerHaptic([20, 20]);
+  };
+
+  const handleDeleteSection = (sectionId: string) => {
+    setMenuData(menuData.filter(s => s.id !== sectionId));
+    triggerHaptic([30, 20, 30]);
   };
 
   const saveMenuChanges = () => {
@@ -361,8 +439,23 @@ export const App: React.FC = () => {
             onReorder={handleReorderItems}
             onToggleTag={handleToggleTag}
             onDeleteItem={handleDeleteItem}
+            onAddItem={handleAddItem}
+            onEditItem={handleEditItem}
+            onEditSection={handleEditSection}
+            onDeleteSection={handleDeleteSection}
           />
         ))}
+
+        {isAdmin && (
+          <div className="flex justify-center mt-6">
+            <button 
+              onClick={handleAddSection}
+              className="bg-red-600 text-white px-8 py-3 rounded-full font-black text-sm flex items-center gap-2 hover:bg-red-700 transition-colors shadow-lg shadow-red-600/30 active:scale-95"
+            >
+              <span className="text-xl">+</span> إضافة قسم جديد
+            </button>
+          </div>
+        )}
 
         {isAdmin && (
           <div className="space-y-10 mt-10 animate-slide-up">
