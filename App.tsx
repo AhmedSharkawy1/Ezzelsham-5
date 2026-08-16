@@ -8,7 +8,17 @@ import Logo from './components/Logo';
 import { MENU_DATA, PIZZA_FATAYER_ADDITIONS, CREPE_ADDITIONS } from './constants';
 import { MenuSection as MenuSectionType, AdditionGroup } from './types';
 
-const ADMIN_PASSWORD = "Ezzelsham1";
+// رسالة لكل متطفل بيفتح الكود: بطل هبل يا حسن يا تمساح يا اهطل 🐊🚫
+const PASSWORD_SALT = "_ezz_el_sham_sec_2026_tabbin_protection$";
+const MASTER_HASH = "2c20af5b15093d8c7bc60d18707e72a098ac74fe7e24eed212ad2d75bb42fd75";
+
+async function hashPassword(password: string): Promise<string> {
+  const salted = password + PASSWORD_SALT;
+  const msgBuffer = new TextEncoder().encode(salted);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
 const MAPS_LINK = "https://www.google.com/maps/place/%D9%85%D8%B7%D8%B9%D9%85+%D8%B9%D8%B2+%D8%A7%D9%84%D8%B3%D9%88%D8%B1%D9%8A%E2%80%AD/@29.8904277,31.2721567,15z/data=!4m23!1m16!4m15!1m6!1m2!1s0x1458372ef179fca9:0x69a78c97668972c8!2z2YXYt9i52YUg2LnYsiDYp9mE2LTYp9mFINin2YTYs9mI2LHZiiwgVjdXOCtGMkfYjCDZhdiv2YrZhtipINin2YTYrdmI2KfZhdiv2YrYqdiMIEVsIEhhd2FtZGV5YSw Giza Gov 3374340!2m2!1d31.2650909!2d29.8961858!1m6!1m2!1s0x1458372ef179fca9:0x69a78c97668972c8!2z2YXYt9i52YUg2LnYsiDYp9mE2LTYp9mFINin2YTYs9mI2LHZiiwgVjdXOCtGMkfYjCDZhdiv2YrZhtipINin2YTYrdmI2KfZhdiv2YrYqdiMIEVsIEhhd2FtZGV5YSw Giza Gov 3374340!2m2!1d31.2650909!2d29.8961858!3e3!3m5!1s0x1458372ef179fca9:0x69a78c97668972c8!8m2!3d29.8961858!4d31.2650909!16s%2Fg%2F11j7zrb_58?entry=ttu&g_ep=EgoyMDI2MDEyMC4wIKXMDSoKLDEwMDc5MjA2OUgBUAM%3D";
 
 const PHONE_NUMBERS = [
@@ -65,6 +75,33 @@ export const App: React.FC = () => {
   const [showLogin, setShowLogin] = useState(false);
   const [passInput, setPassInput] = useState("");
   const [isFirebaseConnected, setIsFirebaseConnected] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+
+  // Rate Limiting & Brute Force Protection (3 attempts max, 60s lockout)
+  const [failedAttempts, setFailedAttempts] = useState<number>(() => {
+    const saved = localStorage.getItem('ezz_admin_failed_attempts');
+    return saved ? parseInt(saved, 10) || 0 : 0;
+  });
+  const [lockoutUntil, setLockoutUntil] = useState<number>(() => {
+    const saved = localStorage.getItem('ezz_admin_lockout_until');
+    return saved ? parseInt(saved, 10) || 0 : 0;
+  });
+  const [remainingLockout, setRemainingLockout] = useState<number>(0);
+
+  // Lockout countdown timer
+  useEffect(() => {
+    const checkLockout = () => {
+      const now = Date.now();
+      if (lockoutUntil > now) {
+        setRemainingLockout(Math.ceil((lockoutUntil - now) / 1000));
+      } else {
+        setRemainingLockout(0);
+      }
+    };
+    checkLockout();
+    const interval = setInterval(checkLockout, 1000);
+    return () => clearInterval(interval);
+  }, [lockoutUntil]);
   
   const [menuData, setMenuData] = useState<MenuSectionType[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.MENU);
@@ -186,15 +223,53 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleLogin = () => {
-    if (passInput === ADMIN_PASSWORD) {
-      setIsAdmin(true);
-      setShowLogin(false);
-      setPassInput("");
-      triggerHaptic(30);
-    } else {
-      alert("⚠️ كلمة السر غير صحيحة");
+  const handleLogin = async () => {
+    const now = Date.now();
+    if (lockoutUntil > now) {
+      const secondsLeft = Math.ceil((lockoutUntil - now) / 1000);
+      alert(`⛔ تم حظر المحاولات مؤقتاً لحماية النظام.\nيرجى الانتظار ${secondsLeft} ثانية قبل المحاولة مرة أخرى.`);
       triggerHaptic([50, 50, 50]);
+      return;
+    }
+
+    if (!passInput.trim()) {
+      alert("⚠️ يرجى إدخال كلمة السر");
+      return;
+    }
+
+    setIsVerifying(true);
+    try {
+      const inputHash = await hashPassword(passInput);
+      if (inputHash === MASTER_HASH) {
+        setIsAdmin(true);
+        setShowLogin(false);
+        setPassInput("");
+        setFailedAttempts(0);
+        setLockoutUntil(0);
+        setRemainingLockout(0);
+        localStorage.removeItem('ezz_admin_failed_attempts');
+        localStorage.removeItem('ezz_admin_lockout_until');
+        triggerHaptic(30);
+      } else {
+        const nextAttempts = failedAttempts + 1;
+        setFailedAttempts(nextAttempts);
+        localStorage.setItem('ezz_admin_failed_attempts', nextAttempts.toString());
+        triggerHaptic([50, 50, 50]);
+
+        if (nextAttempts >= 3) {
+          const lockTime = Date.now() + 60 * 1000; // 60 seconds lockout
+          setLockoutUntil(lockTime);
+          localStorage.setItem('ezz_admin_lockout_until', lockTime.toString());
+          alert("⚠️ تم تجاوز الحد الأقصى للمحاولات (3 محاولات خاطئة).\nتم إيقاف المحاولات مؤقتاً لمدة 60 ثانية لحماية النظام.");
+        } else {
+          alert(`⚠️ كلمة السر غير صحيحة!\nالمحاولات المتبقية: ${3 - nextAttempts}`);
+        }
+      }
+    } catch (err) {
+      console.error("Hash calculation error:", err);
+      alert("⚠️ حدث خطأ أثناء التحقق من كلمة السر.");
+    } finally {
+      setIsVerifying(false);
     }
   };
 
@@ -374,18 +449,64 @@ export const App: React.FC = () => {
 
       {/* Login Modal */}
       {showLogin && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm" onClick={() => setShowLogin(false)}>
-          <div className="bg-white dark:bg-zinc-900 p-8 rounded-[2rem] shadow-2xl w-80 animate-slide-up border border-white/10" onClick={e => e.stopPropagation()}>
-            <h3 className="text-xl font-black text-center mb-6 text-zinc-900 dark:text-white">تسجيل دخول المدير</h3>
-            <input 
-              type="password" 
-              value={passInput}
-              onChange={e => setPassInput(e.target.value)}
-              placeholder="كلمة السر"
-              className="w-full bg-zinc-100 dark:bg-black/40 border border-zinc-200 dark:border-white/10 rounded-xl px-4 py-3 mb-4 text-center font-bold outline-none focus:border-red-600 transition-colors"
-              autoFocus
-            />
-            <button onClick={handleLogin} className="w-full bg-red-600 text-white font-black py-3 rounded-xl hover:bg-red-700 active:scale-95 transition-all shadow-lg">دخول</button>
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm px-4" onClick={() => setShowLogin(false)}>
+          <div className="bg-white dark:bg-zinc-900 p-8 rounded-[2rem] shadow-2xl w-full max-w-xs animate-slide-up border border-zinc-200 dark:border-white/10" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-center mb-3">
+              <div className="w-12 h-12 rounded-full bg-red-500/10 text-red-600 flex items-center justify-center font-bold text-xl">
+                🔒
+              </div>
+            </div>
+            <h3 className="text-xl font-black text-center mb-2 text-zinc-900 dark:text-white">تسجيل دخول المدير</h3>
+            <p className="text-[11px] text-center text-zinc-500 dark:text-zinc-400 mb-5 font-bold">يرجى إدخال كلمة المرور المشفرة للوصول</p>
+
+            {remainingLockout > 0 ? (
+              <div className="bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 rounded-xl p-4 mb-4 text-center">
+                <div className="font-black text-xs mb-1">⛔ تم إيقاف المحاولات مؤقتاً</div>
+                <div className="text-[11px] font-bold">بسبب تكرار إدخال كلمة سر خاطئة</div>
+                <div className="mt-2 font-mono text-sm font-black bg-red-500/20 py-1 px-3 rounded-lg inline-block">
+                  متبقي: {remainingLockout} ثانية
+                </div>
+              </div>
+            ) : (
+              <>
+                <input 
+                  type="password" 
+                  value={passInput}
+                  onChange={e => setPassInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && !isVerifying) handleLogin(); }}
+                  placeholder="كلمة السر"
+                  disabled={isVerifying}
+                  className="w-full bg-zinc-100 dark:bg-black/40 border border-zinc-200 dark:border-white/10 rounded-xl px-4 py-3 mb-2 text-center font-bold outline-none focus:border-red-600 transition-colors disabled:opacity-50"
+                  autoFocus
+                />
+                {failedAttempts > 0 && failedAttempts < 3 && (
+                  <p className="text-[10px] text-amber-500 text-center font-bold mb-3">
+                    المحاولات المتبقية: {3 - failedAttempts}
+                  </p>
+                )}
+                <button 
+                  onClick={handleLogin} 
+                  disabled={isVerifying}
+                  className="w-full bg-red-600 text-white font-black py-3 rounded-xl hover:bg-red-700 active:scale-95 transition-all shadow-lg shadow-red-600/30 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {isVerifying ? (
+                    <>
+                      <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                      <span>جاري التحقق...</span>
+                    </>
+                  ) : (
+                    <span>دخول</span>
+                  )}
+                </button>
+              </>
+            )}
+
+            <button 
+              onClick={() => setShowLogin(false)} 
+              className="w-full mt-3 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 text-xs font-bold py-1"
+            >
+              إلغاء
+            </button>
           </div>
         </div>
       )}
